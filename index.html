@@ -12833,27 +12833,33 @@ USER MESSAGE: "${userMessage}"`;
             prompt += `\n- ERP integrated: ${searchResults.stats.erp_integrated_codes || 0}`;
         }
 
-        prompt += `\n\nINSTRUCTIONS:
-1. Provide a helpful, natural response based on the search results and context
-2. Be specific about what was found (use actual numbers and details)
-3. Format your response with appropriate emojis and structure for readability
-4. If suggesting actions, be specific about what the user can do next
-5. If no results were found, provide helpful suggestions for alternative searches
-6. Keep responses conversational but informative
-7. At the end, include a JSON object with suggested actions in this format:
+        prompt += `\n\nCRITICAL INSTRUCTIONS:
+1. **ONLY USE DATABASE RESULTS ABOVE** - Never make up item codes, project names, or any data
+2. **NO HALLUCINATION** - If no search results are shown above, clearly state "No results found in the database"
+3. **REAL DATA ONLY** - Only reference specific item codes, projects, and details from the search results
+4. **NO INVENTION** - Never create fake codes like "CR-1234" or "CM-5678" - these don't exist
+5. **ERROR HANDLING** - If search error is shown above, acknowledge it and suggest solutions
+6. **BE HONEST** - If database returned empty results, help user refine their search
+
+RESPONSE REQUIREMENTS:
+- Use specific data from search results above (item codes, project names, prices, etc.)
+- If no results found, suggest alternative search terms or portal navigation
+- Format response with emojis and clear structure for readability
+- Provide actionable next steps based on actual available data
+- Include JSON actions at the end in this format:
 
 RESPONSE_ACTIONS: {"actions": [{"type": "action_type", "description": "what this does", "data": {}}]}
 
 Available action types:
 - "search_codes" - Search for item codes
-- "navigate_to_tab" - Switch to a different tab
-- "show_export_options" - Show export functionality  
+- "navigate_to_tab" - Switch to a different tab  
+- "show_export_options" - Show export functionality
 - "load_user_history" - Load user's request history
 - "show_search_tips" - Provide search suggestions
 - "show_project_search" - Help with project search
 - "perform_filter" - Apply filters to current view
 
-Respond naturally and helpfully!`;
+Respond naturally but only with factual information from the database results above!`;
 
         return prompt;
     }
@@ -13280,7 +13286,9 @@ Your responses should demonstrate understanding of the user's intent and provide
                 }
             }
 
-            // Use the enhanced AI search projects function
+            console.log(`Searching projects for: "${searchQuery}"`);
+
+            // Try RPC function first
             const { data, error } = await supabase.rpc('ai_search_projects', {
                 user_id_param: this.currentUser.id,
                 search_query_param: searchQuery,
@@ -13288,20 +13296,76 @@ Your responses should demonstrate understanding of the user's intent and provide
                 limit_param: 10
             });
 
-            if (error) {
-                console.error('Search projects error:', error);
-                return { error: error.message };
+            if (data && !error) {
+                console.log(`Found ${data.length} projects via RPC`);
+                return {
+                    results: data,
+                    searchQuery: searchQuery,
+                    total: data.length,
+                    type: 'projects'
+                };
             }
 
+            // If RPC fails, use direct table query as fallback
+            console.log('RPC failed, using direct table query for projects...');
+            
+            let query = supabase
+                .from('classification_projects')
+                .select(`
+                    id,
+                    project_name,
+                    division_code,
+                    division_description,
+                    section_code, 
+                    section_description,
+                    detailed_section_code,
+                    detailed_section_description,
+                    item_code,
+                    item_description,
+                    status,
+                    created_at
+                `)
+                .eq('status', 'admin_approved')
+                .limit(15)
+                .order('created_at', { ascending: false });
+
+            // Apply search filter if we have a query
+            if (searchQuery) {
+                query = query.or(`project_name.ilike.%${searchQuery}%,division_description.ilike.%${searchQuery}%,section_description.ilike.%${searchQuery}%,detailed_section_description.ilike.%${searchQuery}%,item_description.ilike.%${searchQuery}%`);
+            }
+
+            const { data: directData, error: directError } = await query;
+
+            if (directError) {
+                console.error('Direct project search error:', directError);
+                return { 
+                    error: directError.message,
+                    searchQuery: searchQuery,
+                    results: [],
+                    total: 0,
+                    type: 'projects'
+                };
+            }
+
+            console.log(`Found ${directData ? directData.length : 0} projects via direct query`);
+
             return {
-                results: data || [],
-                searchQuery: searchQuery,
-                total: data ? data.length : 0,
-                type: 'projects'
+                results: directData || [],
+                searchQuery: searchQuery, 
+                total: directData ? directData.length : 0,
+                type: 'projects',
+                source: 'direct_query'
             };
+
         } catch (error) {
             console.error('Search projects error:', error);
-            return { error: error.message };
+            return { 
+                error: error.message,
+                searchQuery: searchQuery || 'unknown',
+                results: [],
+                total: 0,
+                type: 'projects'
+            };
         }
     }
 
