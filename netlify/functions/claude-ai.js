@@ -108,7 +108,7 @@ exports.handler = async (event, context) => {
                 'anthropic-version': '2023-06-01',
             },
             body: JSON.stringify({
-                model: 'claude-3-5-sonnet-20241022',
+                model: 'claude-3-5-sonnet-20240620',
                 max_tokens: maxTokens,
                 messages: [
                     {
@@ -201,7 +201,7 @@ ${prompt}`,
                 success: true,
                 response: aiResponse,
                 usage: data.usage || {},
-                model: 'claude-3-5-sonnet-20241022',
+                model: 'claude-3-5-sonnet-20240620',
                 timestamp: new Date().toISOString()
             }),
         };
