@@ -1,5 +1,5 @@
 // netlify/functions/claude-ai.js
-// Diagnostic Claude AI function with detailed error reporting
+// Auto-detecting Claude AI function that finds working models
 
 exports.handler = async (event, context) => {
     // Handle CORS preflight
@@ -19,9 +19,7 @@ exports.handler = async (event, context) => {
     if (event.httpMethod !== 'POST') {
         return {
             statusCode: 405,
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-            },
+            headers: { 'Access-Control-Allow-Origin': '*' },
             body: JSON.stringify({ 
                 error: 'Method not allowed. Use POST.',
                 success: false
@@ -39,10 +37,7 @@ exports.handler = async (event, context) => {
         if (!prompt) {
             return {
                 statusCode: 400,
-                headers: {
-                    'Access-Control-Allow-Origin': '*',
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     error: 'Prompt is required',
                     success: false,
@@ -64,10 +59,7 @@ exports.handler = async (event, context) => {
             console.error('ANTHROPIC_API_KEY environment variable not set');
             return {
                 statusCode: 200,
-                headers: {
-                    'Access-Control-Allow-Origin': '*',
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     error: 'API key not configured',
                     success: false,
@@ -83,10 +75,7 @@ exports.handler = async (event, context) => {
             console.error('Invalid API key format');
             return {
                 statusCode: 200,
-                headers: {
-                    'Access-Control-Allow-Origin': '*',
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     error: 'Invalid API key format',
                     success: false,
@@ -97,112 +86,148 @@ exports.handler = async (event, context) => {
             };
         }
 
-        console.log('Calling Claude API...');
+        console.log('Testing Claude models to find working one...');
 
-        // Call Claude API with current model
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': apiKey,
-                'anthropic-version': '2023-06-01',
-            },
-            body: JSON.stringify({
-                model: 'claude-3-5-sonnet-20240620',
-                max_tokens: maxTokens,
-                messages: [
-                    {
-                        role: 'user',
-                        content: `You are an AI assistant for a Code Generation Portal. Please provide a helpful response to this user query:
+        // Try multiple model names in order of preference
+        const modelsToTest = [
+            'claude-3-5-sonnet-20241022',
+            'claude-3-5-sonnet-20240620', 
+            'claude-3-haiku-20240307',
+            'claude-3-sonnet-20240229',
+            'claude-3-opus-20240229'
+        ];
 
-${prompt}`,
+        let workingModel = null;
+        let testResults = [];
+
+        for (const modelName of modelsToTest) {
+            try {
+                console.log(`Testing model: ${modelName}`);
+
+                const response = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': apiKey,
+                        'anthropic-version': '2023-06-01',
                     },
-                ],
-            }),
-        });
+                    body: JSON.stringify({
+                        model: modelName,
+                        max_tokens: Math.min(maxTokens, 100), // Use less tokens for testing
+                        messages: [{
+                            role: 'user',
+                            content: prompt.length > 500 ? prompt.substring(0, 500) + '...' : prompt
+                        }],
+                    }),
+                });
 
-        console.log('Claude API response status:', response.status);
+                if (response.ok) {
+                    const data = await response.json();
+                    const aiResponse = data.content[0]?.text;
+                    
+                    if (aiResponse) {
+                        console.log(`✅ Found working model: ${modelName}`);
+                        
+                        // Now make the full request with the working model
+                        const fullResponse = await fetch('https://api.anthropic.com/v1/messages', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-api-key': apiKey,
+                                'anthropic-version': '2023-06-01',
+                            },
+                            body: JSON.stringify({
+                                model: modelName,
+                                max_tokens: maxTokens,
+                                messages: [{
+                                    role: 'user',
+                                    content: `You are an intelligent AI assistant for a Code Generation Portal with access to live database information. You have been provided with actual database search results and user context.
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Claude API error:', {
-                status: response.status,
-                statusText: response.statusText,
-                body: errorText
-            });
-            
-            let errorMessage = 'Claude API error';
-            let diagnostic = '';
-            
-            if (response.status === 401) {
-                errorMessage = 'Invalid or expired API key';
-                diagnostic = 'API key authentication failed - check if key is correct and active';
-            } else if (response.status === 402) {
-                errorMessage = 'Insufficient API credits';
-                diagnostic = 'Your Anthropic account has no credits remaining';
-            } else if (response.status === 429) {
-                errorMessage = 'Rate limit exceeded';
-                diagnostic = 'Too many requests - please wait before trying again';
-            } else if (response.status === 400) {
-                errorMessage = 'Bad request to Claude API';
-                diagnostic = 'Request format issue: ' + errorText.substring(0, 200);
-            } else {
-                errorMessage = `Claude API HTTP ${response.status}`;
-                diagnostic = errorText.substring(0, 300);
+IMPORTANT CAPABILITIES:
+- You receive REAL database search results with item codes, prices, manufacturers, and ERP status
+- You can analyze trends, provide recommendations, and offer insights based on actual data
+- You should handle complex queries that require reasoning and analysis
+- You provide specific, actionable advice based on the real data you've been given
+
+USER QUERY AND CONTEXT:
+${prompt}
+
+Please provide an intelligent, helpful response based on the database information provided above. Focus on being genuinely useful rather than just summarizing the data.`
+                                }],
+                            }),
+                        });
+
+                        if (fullResponse.ok) {
+                            const fullData = await fullResponse.json();
+                            const fullAiResponse = fullData.content[0]?.text;
+                            
+                            return {
+                                statusCode: 200,
+                                headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    success: true,
+                                    response: fullAiResponse,
+                                    usage: fullData.usage || {},
+                                    model: modelName,
+                                    message: `Successfully connected using model: ${modelName}`,
+                                    timestamp: new Date().toISOString()
+                                }),
+                            };
+                        }
+                    }
+                } else {
+                    const errorText = await response.text();
+                    testResults.push({
+                        model: modelName,
+                        status: response.status,
+                        error: errorText.substring(0, 200)
+                    });
+                    console.log(`❌ ${modelName} failed: ${response.status}`);
+                }
+            } catch (error) {
+                testResults.push({
+                    model: modelName,
+                    error: error.message
+                });
+                console.log(`💥 ${modelName} error: ${error.message}`);
             }
-            
-            return {
-                statusCode: 200,
-                headers: {
-                    'Access-Control-Allow-Origin': '*',
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ 
-                    error: errorMessage,
-                    success: false,
-                    diagnostic: diagnostic,
-                    httpStatus: response.status,
-                    details: errorText.substring(0, 500),
-                    fallback: true
-                }),
-            };
         }
 
-        const data = await response.json();
-        const aiResponse = data.content[0]?.text;
+        // No working model found
+        console.error('No working Claude models found');
         
-        if (!aiResponse) {
-            console.error('No response text from Claude');
-            return {
-                statusCode: 200,
-                headers: {
-                    'Access-Control-Allow-Origin': '*',
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ 
-                    error: 'Empty response from Claude',
-                    success: false,
-                    diagnostic: 'Claude API returned empty content',
-                    rawResponse: JSON.stringify(data),
-                    fallback: true
-                }),
-            };
+        // Analyze the errors to provide specific guidance
+        let specificError = 'Unknown error';
+        let solution = 'Check your API key and account status';
+        
+        const lastResult = testResults[testResults.length - 1];
+        if (lastResult) {
+            if (lastResult.status === 401) {
+                specificError = 'Authentication failed';
+                solution = 'Check if your API key is correct and active';
+            } else if (lastResult.status === 402) {
+                specificError = 'Insufficient credits';
+                solution = 'Add credits to your Anthropic account';
+            } else if (lastResult.status === 429) {
+                specificError = 'Rate limit exceeded';
+                solution = 'Wait a moment and try again';
+            } else if (lastResult.error && lastResult.error.includes('not_found_error')) {
+                specificError = 'Model access issue';
+                solution = 'Your API key may not have access to Claude 3 models. Contact Anthropic support.';
+            }
         }
-
-        console.log('Claude AI response received successfully, length:', aiResponse.length);
         
         return {
             statusCode: 200,
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                success: true,
-                response: aiResponse,
-                usage: data.usage || {},
-                model: 'claude-3-5-sonnet-20240620',
-                timestamp: new Date().toISOString()
+            headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                error: `No working Claude models found: ${specificError}`,
+                success: false,
+                diagnostic: `Tested ${modelsToTest.length} models, all failed`,
+                testResults: testResults,
+                solution: solution,
+                testedModels: modelsToTest,
+                fallback: true
             }),
         };
 
@@ -211,10 +236,7 @@ ${prompt}`,
         
         return {
             statusCode: 500,
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 error: 'Function execution error',
                 success: false,
