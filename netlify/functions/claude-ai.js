@@ -1,5 +1,5 @@
 // netlify/functions/claude-ai.js
-// Enhanced Claude AI serverless function for complex query handling and database integration
+// Diagnostic Claude AI function with detailed error reporting
 
 exports.handler = async (event, context) => {
     // Handle CORS preflight
@@ -23,13 +23,15 @@ exports.handler = async (event, context) => {
                 'Access-Control-Allow-Origin': '*',
             },
             body: JSON.stringify({ 
-                error: 'Method not allowed. Use POST for AI requests.',
+                error: 'Method not allowed. Use POST.',
                 success: false
             }),
         };
     }
 
     try {
+        console.log('Claude AI function called at:', new Date().toISOString());
+        
         // Parse request body
         const requestData = JSON.parse(event.body);
         const { prompt, maxTokens = 1500 } = requestData;
@@ -39,59 +41,65 @@ exports.handler = async (event, context) => {
                 statusCode: 400,
                 headers: {
                     'Access-Control-Allow-Origin': '*',
+                    'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ 
-                    error: 'Prompt is required for AI processing',
-                    success: false
+                    error: 'Prompt is required',
+                    success: false,
+                    diagnostic: 'Request missing prompt parameter'
                 }),
             };
         }
 
-        // Get API key from environment variables
+        // Check for API key
         const apiKey = process.env.ANTHROPIC_API_KEY;
         
+        console.log('Environment check:', {
+            hasApiKey: !!apiKey,
+            keyLength: apiKey ? apiKey.length : 0,
+            keyPrefix: apiKey ? apiKey.substring(0, 10) + '...' : 'None'
+        });
+        
         if (!apiKey) {
+            console.error('ANTHROPIC_API_KEY environment variable not set');
             return {
-                statusCode: 500,
+                statusCode: 200,
                 headers: {
                     'Access-Control-Allow-Origin': '*',
+                    'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ 
-                    error: 'AI service not configured on server',
-                    fallback: true,
+                    error: 'API key not configured',
                     success: false,
-                    message: 'ANTHROPIC_API_KEY environment variable not set. Please configure API key in Netlify environment variables.',
-                    setupRequired: true
+                    diagnostic: 'ANTHROPIC_API_KEY environment variable not found',
+                    setupInstructions: 'Set ANTHROPIC_API_KEY in Netlify environment variables',
+                    fallback: true
                 }),
             };
         }
 
-        // Enhanced system prompt for database-integrated AI assistant
-        const enhancedPrompt = `You are an intelligent AI assistant for a Code Generation Portal with access to live database information. You have been provided with actual database search results and user context.
+        // Validate API key format
+        if (!apiKey.startsWith('sk-ant-api03-')) {
+            console.error('Invalid API key format');
+            return {
+                statusCode: 200,
+                headers: {
+                    'Access-Control-Allow-Origin': '*',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    error: 'Invalid API key format',
+                    success: false,
+                    diagnostic: 'API key should start with sk-ant-api03-',
+                    keyPrefix: apiKey.substring(0, 15) + '...',
+                    fallback: true
+                }),
+            };
+        }
 
-IMPORTANT CAPABILITIES:
-- You receive REAL database search results with item codes, prices, manufacturers, and ERP status
-- You can analyze trends, provide recommendations, and offer insights based on actual data
-- You should handle complex queries that require reasoning and analysis
-- You provide specific, actionable advice based on the real data you've been given
+        console.log('Calling Claude API...');
 
-RESPONSE GUIDELINES:
-1. Reference specific item codes, prices, and data points from the database results
-2. Provide intelligent analysis and insights, not just data regurgitation  
-3. Offer practical recommendations based on patterns you observe
-4. Handle complex queries that require multi-step reasoning
-5. Be conversational but professional and helpful
-6. Use appropriate emojis and formatting for readability
-7. Suggest logical next steps based on the context
-
-USER QUERY AND DATABASE CONTEXT:
-${prompt}
-
-Please provide an intelligent, helpful response based on the database information provided above. Focus on being genuinely useful rather than just summarizing the data.`;
-
-        console.log('Calling Claude API with enhanced prompt for complex query handling...');
-
-        // Call Claude API with enhanced prompt
+        // Call Claude API with current model
         const response = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: {
@@ -100,41 +108,62 @@ Please provide an intelligent, helpful response based on the database informatio
                 'anthropic-version': '2023-06-01',
             },
             body: JSON.stringify({
-                model: 'claude-3-sonnet-20240229',
+                model: 'claude-3-5-sonnet-20241022',
                 max_tokens: maxTokens,
                 messages: [
                     {
                         role: 'user',
-                        content: enhancedPrompt,
+                        content: `You are an AI assistant for a Code Generation Portal. Please provide a helpful response to this user query:
+
+${prompt}`,
                     },
                 ],
             }),
         });
 
+        console.log('Claude API response status:', response.status);
+
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Claude API error:', response.status, errorText);
+            console.error('Claude API error:', {
+                status: response.status,
+                statusText: response.statusText,
+                body: errorText
+            });
             
-            let errorMessage = 'Claude AI service error';
+            let errorMessage = 'Claude API error';
+            let diagnostic = '';
+            
             if (response.status === 401) {
-                errorMessage = 'Invalid API key. Check ANTHROPIC_API_KEY environment variable.';
-            } else if (response.status === 429) {
-                errorMessage = 'Rate limit exceeded. Please try again in a moment.';
+                errorMessage = 'Invalid or expired API key';
+                diagnostic = 'API key authentication failed - check if key is correct and active';
             } else if (response.status === 402) {
-                errorMessage = 'Insufficient API credits. Please check your Anthropic account.';
+                errorMessage = 'Insufficient API credits';
+                diagnostic = 'Your Anthropic account has no credits remaining';
+            } else if (response.status === 429) {
+                errorMessage = 'Rate limit exceeded';
+                diagnostic = 'Too many requests - please wait before trying again';
+            } else if (response.status === 400) {
+                errorMessage = 'Bad request to Claude API';
+                diagnostic = 'Request format issue: ' + errorText.substring(0, 200);
+            } else {
+                errorMessage = `Claude API HTTP ${response.status}`;
+                diagnostic = errorText.substring(0, 300);
             }
             
             return {
-                statusCode: 200, // Return 200 to avoid breaking the frontend
+                statusCode: 200,
                 headers: {
                     'Access-Control-Allow-Origin': '*',
+                    'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ 
                     error: errorMessage,
-                    fallback: true,
                     success: false,
-                    message: 'Claude AI temporarily unavailable. Please check API configuration.',
-                    details: `HTTP ${response.status}: ${errorText.substring(0, 200)}`
+                    diagnostic: diagnostic,
+                    httpStatus: response.status,
+                    details: errorText.substring(0, 500),
+                    fallback: true
                 }),
             };
         }
@@ -143,21 +172,24 @@ Please provide an intelligent, helpful response based on the database informatio
         const aiResponse = data.content[0]?.text;
         
         if (!aiResponse) {
+            console.error('No response text from Claude');
             return {
                 statusCode: 200,
                 headers: {
                     'Access-Control-Allow-Origin': '*',
+                    'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({ 
-                    error: 'No response generated by Claude AI',
-                    fallback: true,
+                    error: 'Empty response from Claude',
                     success: false,
-                    message: 'Claude AI did not generate a response. Please try rephrasing your query.'
+                    diagnostic: 'Claude API returned empty content',
+                    rawResponse: JSON.stringify(data),
+                    fallback: true
                 }),
             };
         }
 
-        console.log('Claude AI response generated successfully');
+        console.log('Claude AI response received successfully, length:', aiResponse.length);
         
         return {
             statusCode: 200,
@@ -169,25 +201,26 @@ Please provide an intelligent, helpful response based on the database informatio
                 success: true,
                 response: aiResponse,
                 usage: data.usage || {},
-                model: 'claude-3-sonnet-20240229',
+                model: 'claude-3-5-sonnet-20241022',
                 timestamp: new Date().toISOString()
             }),
         };
 
     } catch (error) {
-        console.error('Claude AI function error:', error);
+        console.error('Function error:', error);
         
         return {
             statusCode: 500,
             headers: {
                 'Access-Control-Allow-Origin': '*',
+                'Content-Type': 'application/json',
             },
             body: JSON.stringify({ 
-                error: 'Internal server error in Claude AI function',
-                fallback: true,
+                error: 'Function execution error',
                 success: false,
-                message: 'AI processing failed due to server error. Please try again.',
-                details: error.message
+                diagnostic: error.message,
+                stack: error.stack?.substring(0, 500),
+                fallback: true
             }),
         };
     }
