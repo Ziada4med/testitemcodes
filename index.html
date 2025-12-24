@@ -208,30 +208,38 @@
                                     <span class="text-xs text-gray-500 font-medium">AI Assistant</span>
                                 </div>
                                 <div class="text-sm text-gray-700 leading-relaxed">
-                                    <p class="mb-3">👋 Welcome to your **AI-Powered** Code Generation Assistant!</p>
-                                    <div class="bg-gradient-to-r from-blue-50 to-green-50 p-3 rounded-lg border border-blue-200 mb-3">
+                                    <p class="mb-3">👋 Welcome to your **Claude AI-Powered** Code Generation Assistant!</p>
+                                    <div class="bg-gradient-to-r from-red-50 to-orange-50 p-3 rounded-lg border border-red-200 mb-3">
                                         <div class="flex items-center space-x-2 mb-2">
-                                            <span class="text-lg">🧠</span>
-                                            <span class="font-semibold text-blue-800">Powered by Claude AI</span>
+                                            <span class="text-lg">🔧</span>
+                                            <span class="font-semibold text-red-800">Setup Required</span>
                                         </div>
-                                        <p class="text-xs text-blue-700">Real AI responses with live database integration</p>
+                                        <p class="text-xs text-red-700">Deploy Claude AI serverless function to enable AI responses</p>
                                     </div>
+                                    
+                                    <div class="bg-blue-50 p-2 rounded-lg border border-blue-200 mb-3">
+                                        <p class="text-xs text-blue-800">
+                                            <strong>🧠 Real AI Features:</strong> This chatbot uses actual Claude AI (no mock responses) 
+                                            for intelligent database analysis, complex query handling, and natural conversations.
+                                        </p>
+                                    </div>
+                                    
                                     <div class="grid grid-cols-1 gap-2 text-xs">
-                                        <div class="bg-blue-50 p-2 rounded-lg border-l-3 border-blue-400">
-                                            <strong class="text-blue-700">🔍 Intelligent Search:</strong> "Find electrical conduit codes 3/4 inch"
-                                        </div>
                                         <div class="bg-green-50 p-2 rounded-lg border-l-3 border-green-400">
-                                            <strong class="text-green-700">⚡ Smart Actions:</strong> "Generate code for steel pipe 4-inch Schedule 40"
-                                        </div>
-                                        <div class="bg-purple-50 p-2 rounded-lg border-l-3 border-purple-400">
-                                            <strong class="text-purple-700">📊 Data Analysis:</strong> "Show my request statistics and trends"
+                                            <strong class="text-green-700">✅ Database Functions:</strong> Search, analytics, and data export work perfectly
                                         </div>
                                         <div class="bg-orange-50 p-2 rounded-lg border-l-3 border-orange-400">
-                                            <strong class="text-orange-700">🤝 Natural Conversation:</strong> Ask questions in plain English!
+                                            <strong class="text-orange-700">🔧 AI Responses:</strong> Require Claude AI serverless function setup
+                                        </div>
+                                        <div class="bg-purple-50 p-2 rounded-lg border-l-3 border-purple-400">
+                                            <strong class="text-purple-700">🎯 Complex Queries:</strong> "Analyze steel pricing trends and recommend suppliers"
+                                        </div>
+                                        <div class="bg-blue-50 p-2 rounded-lg border-l-3 border-blue-400">
+                                            <strong class="text-blue-700">🤝 Natural AI:</strong> Real Claude AI understands context and nuance
                                         </div>
                                     </div>
-                                    <p class="mt-3 text-xs text-gray-600">💡 Try asking anything about your codes, projects, or requests!</p>
-                                    <p class="mt-1 text-xs text-gray-500">🧪 Use "Test AI" button to verify AI connectivity</p>
+                                    <p class="mt-3 text-xs text-gray-600">🔧 Use "Test AI" to check Claude AI setup status</p>
+                                    <p class="mt-1 text-xs text-gray-500">📚 See setup guide for deployment instructions</p>
                                 </div>
                             </div>
                         </div>
@@ -12609,6 +12617,19 @@ class CodeGenerationAI {
 
             if (error) {
                 console.error('Log conversation RPC error:', error);
+                
+                // Check if it's a function not found error
+                if (error.message && (error.message.includes('function') && error.message.includes('does not exist'))) {
+                    console.warn('⚠️ AI conversation logging not available. RPC functions need to be installed.');
+                    // Store this info to show user a one-time setup message
+                    if (!window.aiSetupMessageShown) {
+                        this.showMessage('💡 To enable conversation logging, run the AI database integration script.', 'info');
+                        window.aiSetupMessageShown = true;
+                    }
+                } else {
+                    console.error('Conversation logging failed:', error.message);
+                }
+                
                 // Don't throw error to avoid breaking the chat flow
             } else {
                 console.log('Conversation logged successfully');
@@ -12649,63 +12670,87 @@ class CodeGenerationAI {
             // Prepare context information for the AI
             const contextInfo = this.buildContextForAI(currentTab, context, searchResults, entities);
             
-            // Create the AI prompt
+            // Create the AI prompt with database results
             const aiPrompt = this.buildAIPrompt(userMessage, contextInfo, detectedIntent, searchResults);
             
-            console.log('🤖 Calling Claude AI with prompt:', aiPrompt.substring(0, 200) + '...');
+            console.log('🤖 Calling Claude AI with comprehensive prompt including database results...');
             
-            // Call Claude API
+            // Call Claude API (only real AI - no fallbacks)
             const aiResponse = await this.callClaudeAPI(aiPrompt);
             
-            console.log('✅ Received AI response:', aiResponse.substring(0, 200) + '...');
+            console.log('✅ Received Claude AI response with database-informed insights');
             
             // Parse AI response and extract actions
             const parsedResponse = this.parseAIResponse(aiResponse, detectedIntent, searchResults);
             
-            // Add AI source indicator
+            // Mark as real AI response
             parsedResponse.source = 'claude_ai';
             parsedResponse.isAI = true;
-            
-            // Log successful AI usage
-            console.log('🎯 AI Response parsed successfully:', {
-                hasActions: parsedResponse.actions.length > 0,
-                actionTypes: parsedResponse.actions.map(a => a.type),
-                textLength: parsedResponse.text.length
-            });
             
             return parsedResponse;
             
         } catch (error) {
-            console.error('❌ AI generation error:', error);
+            console.error('❌ Claude AI error:', error);
             
-            // Provide detailed error information
+            // Provide detailed error information to user
             this.showAIErrorNotification(error);
             
-            // Fallback to rule-based response if AI fails
-            console.log('🔄 Falling back to rule-based response...');
-            const fallbackResponse = this.generateFallbackResponse(detectedIntent, entities, userMessage, currentTab, context, searchResults);
-            fallbackResponse.source = 'fallback';
-            fallbackResponse.isAI = false;
-            fallbackResponse.aiError = error.message;
-            
-            return fallbackResponse;
+            // Return error response instead of fallback
+            return {
+                text: `❌ **Claude AI Unavailable**\n\n${error.message}\n\n🔧 **Database Functions Still Work:**\nYour database search and portal actions are fully functional. Only AI responses are temporarily unavailable.\n\n📚 **Setup Required:** Deploy the Claude AI serverless function to enable intelligent responses.`,
+                actions: [],
+                source: 'error',
+                isAI: false,
+                aiError: error.message,
+                setupRequired: true
+            };
         }
     }
 
     showAIErrorNotification(error) {
-        // Show user-friendly notification about AI status
-        let message = '🤖 AI Assistant Status: ';
+        // Show clear error information about AI setup requirements
+        let message = '🚨 Claude AI Setup Required';
+        let type = 'error';
+        let setupInstructions = '';
         
-        if (error.message.includes('API')) {
-            message += 'AI service temporarily unavailable. Using smart fallback responses.';
-        } else if (error.message.includes('network') || error.message.includes('fetch')) {
-            message += 'Network connectivity issue. Responses may be limited.';
+        if (error.message.includes('SETUP_REQUIRED')) {
+            setupInstructions = `
+🔧 **Required Steps:**
+1. Deploy the serverless function to /.netlify/functions/claude-ai
+2. Set ANTHROPIC_API_KEY environment variable
+3. Redeploy your site
+4. Refresh this page
+
+📚 **See the setup guide for detailed instructions**
+            `;
+        } else if (error.message.includes('NETWORK_ERROR')) {
+            setupInstructions = `
+🌐 **Network Issue:**
+• Ensure you're accessing via HTTPS (not file://)
+• Check serverless function deployment
+• Verify network connectivity
+• Try refreshing the page
+            `;
         } else {
-            message += 'Processing with local intelligence. Full AI will return shortly.';
+            setupInstructions = `
+❌ **AI Configuration Error:**
+${error.message}
+
+🔧 **Next Steps:**
+• Check serverless function logs
+• Verify ANTHROPIC_API_KEY is set
+• Ensure function is properly deployed
+            `;
         }
         
-        // Show a non-intrusive notification
-        this.showMessage(message, 'info');
+        // Show detailed setup instructions
+        this.addAIMessage(`${message}\n\n${setupInstructions}`, [], {
+            source: 'system',
+            isAI: false,
+            setupRequired: true
+        });
+        
+        this.showMessage(message + ' - Check chat for setup instructions', type);
     }
 
     buildContextForAI(currentTab, context, searchResults, entities) {
@@ -12814,14 +12859,96 @@ Respond naturally and helpfully!`;
     }
 
     async callClaudeAPI(prompt) {
+        // Only try serverless function - no mock AI fallback
+        const functionUrl = '/.netlify/functions/claude-ai';
+        
+        console.log('🧠 Calling Claude AI via serverless function...');
+        
+        try {
+            const response = await fetch(functionUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    prompt: prompt,
+                    maxTokens: 1500
+                })
+            });
+
+            if (!response.ok) {
+                if (response.status === 404) {
+                    throw new Error('FUNCTION_NOT_DEPLOYED: Serverless function not found at /.netlify/functions/claude-ai');
+                }
+                
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(`Function error: ${response.status} - ${errorData.error || response.statusText}`);
+            }
+
+            const data = await response.json();
+            
+            if (data.success && data.response) {
+                console.log('✅ Claude AI response received successfully');
+                return data.response;
+            } else if (data.fallback) {
+                throw new Error(`AI_SERVICE_ERROR: ${data.message || 'AI temporarily unavailable'}`);
+            } else {
+                throw new Error('Invalid response format from Claude AI function');
+            }
+        } catch (error) {
+            console.error('❌ Claude AI call failed:', error);
+            
+            // Provide specific error guidance
+            if (error.message.includes('FUNCTION_NOT_DEPLOYED')) {
+                throw new Error('SETUP_REQUIRED: Please deploy the Claude AI serverless function. See setup guide for instructions.');
+            } else if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
+                throw new Error('NETWORK_ERROR: Cannot reach Claude AI function. Ensure proper deployment and try refreshing the page.');
+            } else {
+                throw error;
+            }
+        }
+    }
+
+    updateAIPromptForComplexQueries(prompt, userMessage) {
+        // Enhance prompt for complex queries that require AI reasoning
+        const complexQueryPrompt = prompt + `
+
+ADVANCED AI CAPABILITIES:
+You have access to real database search results above. Use this data to provide intelligent, specific responses.
+
+For complex queries, you should:
+1. Analyze the user's actual request beyond simple keyword matching
+2. Use the database results to provide specific insights and recommendations  
+3. Suggest related actions based on the data patterns you see
+4. Provide contextual advice based on ERP status, pricing trends, or manufacturer patterns
+5. Guide users through multi-step workflows when needed
+
+RESPONSE GUIDELINES:
+- Reference specific item codes, prices, and manufacturers from the database results
+- Provide data-driven insights and recommendations
+- Suggest next steps that make sense given the actual data
+- Be conversational but informative
+- Include relevant emojis and formatting for readability
+
+Your responses should demonstrate understanding of the user's intent and provide value beyond simple data retrieval.`;
+
+        return complexQueryPrompt;
+    }
+
+    // Alternative method for development/testing without serverless functions
+    async callClaudeAPIDirect(prompt) {
+        console.warn('⚠️ Attempting direct Claude API call - this will fail in browsers due to CORS');
+        
         try {
             const response = await fetch("https://api.anthropic.com/v1/messages", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
+                    // Note: API key should NEVER be in client-side code in production
+                    // This is only for development testing
                 },
                 body: JSON.stringify({
-                    model: "claude-sonnet-4-20250514",
+                    model: "claude-3-sonnet-20240229",
                     max_tokens: 1000,
                     messages: [
                         { role: "user", content: prompt }
@@ -12841,7 +12968,9 @@ Respond naturally and helpfully!`;
                 throw new Error('Invalid response format from Claude API');
             }
         } catch (error) {
-            console.error('Claude API call failed:', error);
+            if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                throw new Error('CORS_ERROR: Direct API calls blocked by browser. Please use serverless function.');
+            }
             throw error;
         }
     }
@@ -14072,19 +14201,21 @@ Respond naturally and helpfully!`;
             sourceColor = 'text-green-600';
             sourceLabel = 'Claude AI';
             sourceBadge = '<span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Live AI</span>';
+        } else if (source === 'error' || responseData.setupRequired) {
+            sourceIcon = '🔧';
+            sourceColor = 'text-red-600';
+            sourceLabel = 'Setup Required';
+            sourceBadge = '<span class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">Config Needed</span>';
+        } else if (source === 'system') {
+            sourceIcon = '🔧';
+            sourceColor = 'text-gray-600';
+            sourceLabel = 'System';
+            sourceBadge = '<span class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full">Info</span>';
         } else if (source === 'fallback' || responseData.isAI === false) {
             sourceIcon = '⚙️';
             sourceColor = 'text-orange-600';
-            sourceLabel = 'Smart Logic';
-            sourceBadge = '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full">Fallback</span>';
-        } else if (typeof source === 'string') {
-            // Handle legacy string source parameter
-            if (source === 'claude_ai') {
-                sourceIcon = '🧠';
-                sourceColor = 'text-green-600';
-                sourceLabel = 'Claude AI';
-                sourceBadge = '<span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Live AI</span>';
-            }
+            sourceLabel = 'Basic Response';
+            sourceBadge = '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full">Limited</span>';
         }
         
         messageEl.innerHTML = `
@@ -14102,8 +14233,8 @@ Respond naturally and helpfully!`;
                 <span class="text-xs text-gray-400 block mt-2">${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                 
                 ${responseData.aiError ? `
-                    <div class="mt-2 text-xs text-orange-600 bg-orange-50 p-2 rounded">
-                        💡 AI temporarily unavailable: ${responseData.aiError}
+                    <div class="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded">
+                        🚨 Setup Required: ${responseData.aiError}
                     </div>
                 ` : ''}
             </div>
@@ -14214,51 +14345,68 @@ Respond naturally and helpfully!`;
     }
 
     async testAIConnectivity() {
-        const testMessage = 'Hello! Please respond with "AI is working correctly" to confirm connectivity.';
-        
         try {
-            this.addUserMessage('🧪 Testing AI connectivity...');
+            this.addUserMessage('🧪 Testing Claude AI connectivity...');
             this.showTypingIndicator();
             
-            const response = await fetch("https://api.anthropic.com/v1/messages", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    model: "claude-sonnet-4-20250514",
-                    max_tokens: 100,
-                    messages: [
-                        { role: "user", content: testMessage }
-                    ],
-                })
-            });
+            // Test actual Claude AI connection
+            const testPrompt = 'TEST CONNECTION: Please respond with "Claude AI is working correctly" to confirm connectivity and functionality.';
+            const response = await this.callClaudeAPI(testPrompt);
 
             this.hideTypingIndicator();
-
-            if (response.ok) {
-                const data = await response.json();
-                const aiResponse = data.content[0]?.text || 'AI connected successfully!';
-                
-                this.addAIMessage(`✅ **AI Test Successful!**\n\nClaude AI is working properly.\n\nTest Response: ${aiResponse}`, [], {
-                    source: 'claude_ai',
-                    isAI: true
-                });
-                
-                this.showMessage('🎉 AI connectivity test passed! You\'re using live AI responses.', 'success');
-            } else {
-                throw new Error(`API responded with ${response.status}`);
-            }
+            
+            // If we get here, Claude AI is working
+            this.addAIMessage(`✅ **Claude AI Test Successful!**\n\n🧠 **Status:** Claude AI is working properly through the serverless function.\n\n**Test Response:** ${response}\n\n🎉 **All Systems Operational:**\n• Real AI responses with database integration\n• Intelligent analysis and recommendations\n• Natural conversation capabilities\n• Complex query handling\n\n💡 **You're now using full Claude AI with your database!**`, [], {
+                source: 'claude_ai',
+                isAI: true
+            });
+            
+            this.showMessage('🎉 Claude AI test successful! Full AI capabilities active.', 'success');
+            
         } catch (error) {
             this.hideTypingIndicator();
             
-            this.addAIMessage(`❌ **AI Test Failed**\n\nClaude AI is currently unavailable.\n\nError: ${error.message}\n\n🔧 **What this means:**\n• You'll receive smart rule-based responses instead\n• Database search and actions still work perfectly\n• AI will automatically return when available`, [], {
-                source: 'fallback',
+            let errorType = 'Configuration Error';
+            let instructions = '';
+            
+            if (error.message.includes('SETUP_REQUIRED')) {
+                errorType = 'Setup Required';
+                instructions = `🔧 **Deploy Serverless Function:**
+1. Create \`netlify/functions/claude-ai.js\`
+2. Copy the provided function code
+3. Set \`ANTHROPIC_API_KEY\` environment variable  
+4. Deploy to Netlify
+5. Refresh this page
+
+📚 **See setup guide for detailed steps**`;
+            } else if (error.message.includes('NETWORK_ERROR')) {
+                errorType = 'Network/Deployment Issue';
+                instructions = `🌐 **Check Deployment:**
+• Ensure you're accessing via HTTPS (not file://)
+• Verify serverless function is deployed correctly
+• Check Netlify function logs for errors
+• Confirm \`ANTHROPIC_API_KEY\` is set
+
+🔄 **Try refreshing the page after fixing**`;
+            } else {
+                errorType = 'API Configuration Error';
+                instructions = `⚙️ **Check Configuration:**
+• Verify \`ANTHROPIC_API_KEY\` environment variable
+• Ensure API key is valid and has credits
+• Check serverless function logs in Netlify
+• Confirm function is properly deployed
+
+💡 **Error Details:** ${error.message}`;
+            }
+            
+            this.addAIMessage(`❌ **Claude AI Test Failed**\n\n**Error Type:** ${errorType}\n\n${instructions}\n\n🚨 **Important:** This chatbot requires real Claude AI to function. Database features work, but no AI responses are available until proper setup is completed.\n\n📖 **Next Steps:** Follow the setup guide to deploy the serverless function with your Anthropic API key.`, [], {
+                source: 'error',
                 isAI: false,
-                aiError: error.message
+                aiError: error.message,
+                setupRequired: true
             });
             
-            this.showMessage('⚠️ AI temporarily unavailable. Using smart fallback responses.', 'warning');
+            this.showMessage(`❌ Claude AI test failed: ${errorType}`, 'error');
         }
     }
 
