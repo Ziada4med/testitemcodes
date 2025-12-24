@@ -1,0 +1,48 @@
+{
+  "name": "ai-chatbot-code-portal",
+  "version": "1.0.0",
+  "description": "AI-powered chatbot for Code Generation Portal with Claude integration",
+  "main": "CODE_GENERATION_PORTAL_V49_WITH_AI_CHATBOT.html",
+  "scripts": {
+    "dev": "netlify dev",
+    "build": "echo 'Static site - no build needed'",
+    "deploy": "netlify deploy --prod",
+    "test-ai": "node test-ai-function.js",
+    "setup": "npm install && echo 'Setup complete! Set ANTHROPIC_API_KEY in Netlify dashboard'"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0"
+  },
+  "devDependencies": {
+    "netlify-cli": "^17.0.0"
+  },
+  "keywords": [
+    "ai",
+    "chatbot", 
+    "claude",
+    "anthropic",
+    "code-generation",
+    "database",
+    "portal"
+  ],
+  "author": "AI Chatbot Integration Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/ai-chatbot-portal"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "netlify": {
+    "functions": {
+      "directory": "netlify/functions"
+    }
+  },
+  "config": {
+    "anthropic": {
+      "model": "claude-3-sonnet-20240229",
+      "maxTokens": 1000
+    }
+  }
+}
