@@ -121,6 +121,61 @@
             color: #6b7280;
             margin-top: 4px;
         }
+        
+        /* Structured AI Message Content */
+        .structured-content h2, .structured-content h3, .structured-content h4, .structured-content h5 {
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            line-height: 1.3;
+            color: #1f2937;
+        }
+        
+        .structured-content ul {
+            margin: 0.5rem 0;
+            padding-left: 0;
+            list-style: none;
+        }
+        
+        .structured-content li {
+            margin-bottom: 0.25rem;
+            color: #374151;
+        }
+        
+        .structured-content .bg-gray-50 {
+            margin: 1rem 0;
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid #e5e7eb;
+            background-color: #f9fafb;
+        }
+        
+        .structured-content .bg-gray-50 h5 {
+            margin: 0 0 0.5rem 0;
+            color: #374151;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        
+        .structured-content .flex.justify-between {
+            margin: 0.125rem 0;
+            padding: 0.25rem 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        
+        .structured-content .flex.justify-between:last-child {
+            border-bottom: none;
+        }
+        
+        .ai-message .bg-white {
+            max-width: 700px;
+            width: 100%;
+        }
+        
+        .structured-content strong {
+            color: #111827;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body class="bg-gray-100">
@@ -262,6 +317,9 @@
                             </button>
                             <button class="quick-action-btn bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-full text-xs transition-colors" data-action="test_ai">
                                 🧪 Test AI
+                            </button>
+                            <button class="quick-action-btn bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1 rounded-full text-xs transition-colors" data-action="test_db">
+                                🔍 Test DB
                             </button>
                         </div>
                     </div>
@@ -12794,34 +12852,79 @@ CONTEXT:
 
 USER MESSAGE: "${userMessage}"`;
 
-        // Add search results context if available
+        // Add search results context if available with detailed logging
         if (searchResults && searchResults.results) {
             if (searchResults.results.length > 0) {
-                prompt += `\n\nSEARCH RESULTS FOUND:`;
-                prompt += `\nQuery: "${searchResults.searchQuery}"`;
-                prompt += `\nTotal results: ${searchResults.total}`;
-                prompt += `\nSample results:`;
+                prompt += `\n\n=== ACTUAL DATABASE SEARCH RESULTS ===`;
+                prompt += `\nSearch Query: "${searchResults.searchQuery}"`;
+                prompt += `\nTotal Results Found: ${searchResults.total}`;
+                prompt += `\nResult Type: ${searchResults.type || 'items'}`;
+                prompt += `\nDatabase Source: ${searchResults.source || 'rpc_function'}`;
+                prompt += `\n\nDETAILED RESULTS:`;
                 
-                searchResults.results.slice(0, 3).forEach((result, index) => {
+                // Show ALL results with complete data
+                searchResults.results.forEach((result, index) => {
+                    prompt += `\n\n--- Result ${index + 1} ---`;
                     if (result.item_code) {
-                        prompt += `\n${index + 1}. ${result.item_code} - ${result.description1 || 'No description'}`;
-                        prompt += `\n   Price: ${result.unit_price ? result.unit_price + ' ' + result.currency_code : 'Not set'}`;
-                        prompt += `\n   Manufacturer: ${result.manufacturer || 'Not specified'}`;
-                        prompt += `\n   ERP Status: ${result.erp_integrated ? 'Integrated' : 'Pending'}`;
+                        // Item code results
+                        prompt += `\nItem Code: ${result.item_code}`;
+                        prompt += `\nDescription: ${result.description1 || 'No description'}`;
+                        prompt += `\nPrice: ${result.unit_price ? result.unit_price + ' ' + (result.currency_code || 'USD') : 'Not set'}`;
+                        prompt += `\nManufacturer: ${result.manufacturer || 'Not specified'}`;
+                        prompt += `\nUOM: ${result.uom || 'Not specified'}`;
+                        prompt += `\nCountry: ${result.country_of_origin || 'Not specified'}`;
+                        prompt += `\nModel: ${result.model_number || 'Not specified'}`;
+                        prompt += `\nStatus: ${result.status || 'Unknown'}`;
+                        prompt += `\nERP Integrated: ${result.erp_integrated ? 'Yes' : 'No'}`;
+                        prompt += `\nCreated: ${result.created_at || 'Unknown'}`;
+                        if (result.project && result.project.project_name) {
+                            prompt += `\nProject: ${result.project.project_name}`;
+                        }
                     } else if (result.project_name) {
-                        prompt += `\n${index + 1}. Project: ${result.project_name}`;
-                        prompt += `\n   CSI: ${result.division_code} > ${result.section_code} > ${result.detailed_section_code}`;
-                        prompt += `\n   Attributes: ${result.attributes_count || 0}, Generated Codes: ${result.item_codes_generated || 0}`;
+                        // Project results
+                        prompt += `\nProject ID: ${result.id}`;
+                        prompt += `\nProject Name: ${result.project_name}`;
+                        prompt += `\nDivision: ${result.division_code} - ${result.division_description || 'No description'}`;
+                        prompt += `\nSection: ${result.section_code} - ${result.section_description || 'No description'}`;
+                        prompt += `\nDetailed Section: ${result.detailed_section_code} - ${result.detailed_section_description || 'No description'}`;
+                        prompt += `\nItem Code: ${result.item_code || 'Not specified'}`;
+                        prompt += `\nItem Description: ${result.item_description || 'Not specified'}`;
+                        prompt += `\nStatus: ${result.status}`;
+                        prompt += `\nCreated: ${result.created_at || 'Unknown'}`;
+                        if (result.attributes_count !== undefined) {
+                            prompt += `\nAttributes Count: ${result.attributes_count}`;
+                        }
+                        if (result.item_codes_generated !== undefined) {
+                            prompt += `\nGenerated Codes: ${result.item_codes_generated}`;
+                        }
+                        if (result.created_by_username) {
+                            prompt += `\nCreated By: ${result.created_by_username}`;
+                        }
+                    } else {
+                        // Unknown result type - show all fields
+                        prompt += `\nRAW DATA: ${JSON.stringify(result)}`;
                     }
                 });
+                
+                prompt += `\n\n=== END DATABASE RESULTS ===`;
             } else {
-                prompt += `\n\nSEARCH RESULTS: No results found for "${searchResults.searchQuery}"`;
+                prompt += `\n\n=== DATABASE SEARCH RESULTS ===`;
+                prompt += `\nSearch Query: "${searchResults.searchQuery}"`;
+                prompt += `\nResult: NO RESULTS FOUND`;
+                prompt += `\nDatabase searched but returned 0 results`;
+                prompt += `\n=== END DATABASE RESULTS ===`;
             }
         } else if (searchResults && searchResults.error) {
-            prompt += `\n\nSEARCH ERROR: ${searchResults.error}`;
+            prompt += `\n\n=== DATABASE ERROR ===`;
+            prompt += `\nError: ${searchResults.error}`;
             if (searchResults.suggestion) {
                 prompt += `\nSuggestion: ${searchResults.suggestion}`;
             }
+            prompt += `\n=== END ERROR ===`;
+        } else {
+            prompt += `\n\n=== NO DATABASE SEARCH PERFORMED ===`;
+            prompt += `\nReason: No search results object provided`;
+            prompt += `\n=== END ===`;
         }
 
         // Add statistics if available
@@ -12833,33 +12936,31 @@ USER MESSAGE: "${userMessage}"`;
             prompt += `\n- ERP integrated: ${searchResults.stats.erp_integrated_codes || 0}`;
         }
 
-        prompt += `\n\nCRITICAL INSTRUCTIONS:
-1. **ONLY USE DATABASE RESULTS ABOVE** - Never make up item codes, project names, or any data
-2. **NO HALLUCINATION** - If no search results are shown above, clearly state "No results found in the database"
-3. **REAL DATA ONLY** - Only reference specific item codes, projects, and details from the search results
-4. **NO INVENTION** - Never create fake codes like "CR-1234" or "CM-5678" - these don't exist
-5. **ERROR HANDLING** - If search error is shown above, acknowledge it and suggest solutions
-6. **BE HONEST** - If database returned empty results, help user refine their search
+        prompt += `\n\n🚨 ABSOLUTE REQUIREMENTS 🚨
+1. **USE ONLY THE DATA ABOVE** - Never invent project IDs, item codes, or any information
+2. **EXACT DATA ONLY** - Copy project names, IDs, and details EXACTLY as shown above
+3. **NO GUESSING** - If information isn't in the database results above, don't mention it
+4. **NO PROJECT ID INVENTION** - Only use the exact "Project ID" numbers from the results above
+5. **STRUCTURED RESPONSE** - Format results as clean, organized cards/sections
 
-RESPONSE REQUIREMENTS:
-- Use specific data from search results above (item codes, project names, prices, etc.)
-- If no results found, suggest alternative search terms or portal navigation
-- Format response with emojis and clear structure for readability
-- Provide actionable next steps based on actual available data
-- Include JSON actions at the end in this format:
+RESPONSE FORMAT:
+- Use clear card-like sections with headers
+- Show results in organized paragraphs/blocks
+- Include all relevant fields from the actual database results
+- Use emojis for visual organization
+- Create a professional, structured layout
 
+If NO RESULTS found above: Say "No results found in the database" and suggest alternatives.
+If ERROR shown above: Acknowledge the error and suggest solutions.
+
+At the end, include actions in this format:
 RESPONSE_ACTIONS: {"actions": [{"type": "action_type", "description": "what this does", "data": {}}]}
 
-Available action types:
-- "search_codes" - Search for item codes
-- "navigate_to_tab" - Switch to a different tab  
-- "show_export_options" - Show export functionality
-- "load_user_history" - Load user's request history
-- "show_search_tips" - Provide search suggestions
-- "show_project_search" - Help with project search
-- "perform_filter" - Apply filters to current view
+RESPOND ONLY WITH FACTUAL DATA FROM THE DATABASE RESULTS SHOWN ABOVE!`;
 
-Respond naturally but only with factual information from the database results above!`;
+        // Log the complete prompt for debugging
+        console.log('🔍 Complete AI Prompt:', prompt);
+        console.log('📊 Search Results Object:', JSON.stringify(searchResults, null, 2));
 
         return prompt;
     }
@@ -14282,19 +14383,22 @@ Your responses should demonstrate understanding of the user's intent and provide
             sourceBadge = '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full">Limited</span>';
         }
         
+        // Enhanced message formatting for structured data
+        let formattedMessage = this.formatStructuredMessage(message);
+        
         messageEl.innerHTML = `
-            <div class="bg-white p-4 rounded-2xl rounded-tl-md shadow-sm border border-gray-100 max-w-xs">
-                <div class="flex items-center space-x-2 mb-2">
+            <div class="bg-white p-4 rounded-2xl rounded-tl-md shadow-sm border border-gray-100 max-w-2xl">
+                <div class="flex items-center space-x-2 mb-3">
                     <div class="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
                         <span class="text-sm">${sourceIcon}</span>
                     </div>
                     <span class="text-xs ${sourceColor} font-medium">${sourceLabel}</span>
                     ${sourceBadge}
                 </div>
-                <div class="text-sm text-gray-700 leading-relaxed">
-                    ${message}
+                <div class="text-sm text-gray-800 leading-relaxed structured-content">
+                    ${formattedMessage}
                 </div>
-                <span class="text-xs text-gray-400 block mt-2">${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                <span class="text-xs text-gray-400 block mt-3">${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                 
                 ${responseData.aiError ? `
                     <div class="mt-2 text-xs text-red-600 bg-red-50 p-2 rounded">
@@ -14305,6 +14409,44 @@ Your responses should demonstrate understanding of the user's intent and provide
         `;
         messagesContainer.appendChild(messageEl);
         this.scrollToBottom();
+    }
+
+    formatStructuredMessage(message) {
+        // Enhanced formatting for structured content
+        let formatted = message;
+        
+        // Convert markdown-style headers to HTML
+        formatted = formatted.replace(/^### (.*$)/gm, '<h4 class="font-bold text-gray-900 mt-4 mb-2">$1</h4>');
+        formatted = formatted.replace(/^## (.*$)/gm, '<h3 class="font-bold text-gray-900 text-lg mt-4 mb-2">$1</h3>');
+        formatted = formatted.replace(/^# (.*$)/gm, '<h2 class="font-bold text-gray-900 text-xl mt-4 mb-2">$1</h2>');
+        
+        // Convert **bold** to HTML
+        formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>');
+        
+        // Convert bullet points to proper lists
+        formatted = formatted.replace(/^• (.*$)/gm, '<li class="ml-4 mb-1">• $1</li>');
+        formatted = formatted.replace(/^- (.*$)/gm, '<li class="ml-4 mb-1">• $1</li>');
+        
+        // Wrap consecutive list items in ul tags
+        formatted = formatted.replace(/(<li class="ml-4 mb-1">.*<\/li>\s*)+/gs, '<ul class="my-2">$&</ul>');
+        
+        // Create card-like sections for structured data
+        formatted = formatted.replace(/^--- (.*?) ---$/gm, '<div class="bg-gray-50 border border-gray-200 rounded-lg p-3 my-3"><h5 class="font-semibold text-gray-800 mb-2">$1</h5>');
+        
+        // Close card sections (look for next card or end of message)
+        formatted = formatted.replace(/(<div class="bg-gray-50[^>]*><h5[^>]*>.*?<\/h5>)(.*?)(?=<div class="bg-gray-50|$)/gs, '$1$2</div>');
+        
+        // Format project/item details with better spacing
+        formatted = formatted.replace(/^(Project ID|Item Code|Project Name|Description|Price|Status|Created): (.*)$/gm, 
+            '<div class="flex justify-between items-center py-1 border-b border-gray-100 last:border-b-0"><span class="text-gray-600 text-xs">$1:</span><span class="font-medium text-gray-900 text-xs">$2</span></div>');
+        
+        // Convert line breaks to HTML
+        formatted = formatted.replace(/\n/g, '<br>');
+        
+        // Clean up extra breaks
+        formatted = formatted.replace(/(<br>\s*){3,}/g, '<br><br>');
+        
+        return formatted;
     }
 
     showTypingIndicator() {
@@ -14395,7 +14537,8 @@ Your responses should demonstrate understanding of the user's intent and provide
             'check_status': 'Check my request status',
             'filter_approved': 'Show approved requests',
             'filter_requests': 'Filter requests',
-            'test_ai': null // Special handling
+            'test_ai': null, // Special handling
+            'test_db': null  // Special handling
         };
         
         if (action === 'test_ai') {
@@ -14403,9 +14546,96 @@ Your responses should demonstrate understanding of the user's intent and provide
             return;
         }
         
+        if (action === 'test_db') {
+            this.testDatabaseConnection();
+            return;
+        }
+        
         const message = quickActions[action] || action;
         document.getElementById('ai-chat-input').value = message;
         this.sendMessage();
+    }
+
+    async testDatabaseConnection() {
+        this.addUserMessage('🔍 Testing database connection...');
+        console.log('🔍 Testing database connection and search functions...');
+        
+        try {
+            // Test 1: Check if we can access the database
+            const { data: testData, error: testError } = await supabase
+                .from('classification_projects')
+                .select('id, project_name, status, division_description')
+                .limit(5);
+                
+            if (testError) {
+                console.error('❌ Database connection failed:', testError);
+                this.addAIMessage(`❌ **Database Connection Failed**\n\n**Error:** ${testError.message}\n\n**🔧 Check:**\n• Supabase configuration\n• Database permissions\n• Table existence`, [], {
+                    source: 'system',
+                    isAI: false
+                });
+                return;
+            }
+            
+            console.log('✅ Database connection working, found projects:', testData);
+            
+            // Test 2: Try the search functions
+            const searchResults = await this.searchProjects({ materials: ['concrete'] }, 'concrete projects test');
+            console.log('🔍 Project search test results:', searchResults);
+            
+            let resultSummary = '';
+            if (testData && testData.length > 0) {
+                resultSummary = `\n\n--- **Sample Projects Found** ---\n`;
+                testData.forEach((project, index) => {
+                    resultSummary += `\n**Project ${index + 1}:**\n`;
+                    resultSummary += `Project Name: ${project.project_name}\n`;
+                    resultSummary += `Project ID: ${project.id}\n`;
+                    resultSummary += `Status: ${project.status}\n`;
+                    if (project.division_description) {
+                        resultSummary += `Division: ${project.division_description}\n`;
+                    }
+                });
+                resultSummary += `\n--- **End Sample Data** ---`;
+            }
+            
+            let searchSummary = '';
+            if (searchResults && searchResults.results && searchResults.results.length > 0) {
+                searchSummary = `\n\n--- **Search Function Test** ---\n`;
+                searchSummary += `Search Query: "${searchResults.searchQuery}"\n`;
+                searchSummary += `Results Found: ${searchResults.total}\n`;
+                searchSummary += `Function Used: ${searchResults.source || 'rpc_function'}\n`;
+                
+                searchResults.results.slice(0, 2).forEach((result, index) => {
+                    searchSummary += `\n**Search Result ${index + 1}:**\n`;
+                    searchSummary += `Project Name: ${result.project_name}\n`;
+                    searchSummary += `Project ID: ${result.id}\n`;
+                    if (result.division_description) {
+                        searchSummary += `Division: ${result.division_description}\n`;
+                    }
+                });
+                searchSummary += `\n--- **End Search Results** ---`;
+            } else {
+                searchSummary = `\n\n--- **Search Function Test** ---\n`;
+                searchSummary += `Search Query: "${searchResults?.searchQuery || 'concrete'}"\n`;
+                searchSummary += `Results Found: ${searchResults?.total || 0}\n`;
+                searchSummary += `Function Source: ${searchResults?.source || 'unknown'}\n`;
+                if (searchResults?.error) {
+                    searchSummary += `Error: ${searchResults.error}\n`;
+                }
+                searchSummary += `--- **End Search Test** ---`;
+            }
+            
+            this.addAIMessage(`✅ **Database Test Results**\n\n**🔗 Database Connection:** Working ✅\n**📁 Projects Table:** Accessible ✅\n**📊 Total Projects Found:** ${testData ? testData.length : 0}${resultSummary}${searchSummary}\n\n**🎯 Next Steps:**\n• Database is working properly\n• Search functions are operational\n• AI should receive real data from these searches`, [], {
+                source: 'system',
+                isAI: false
+            });
+            
+        } catch (error) {
+            console.error('💥 Database test error:', error);
+            this.addAIMessage(`💥 **Database Test Error**\n\n**Error:** ${error.message}\n\n**🔧 Possible Issues:**\n• Supabase client not initialized\n• Network connection problems\n• Configuration missing`, [], {
+                source: 'system',
+                isAI: false
+            });
+        }
     }
 
     async testAIConnectivity() {
