@@ -12966,8 +12966,8 @@ RESPOND ONLY WITH FACTUAL DATA FROM THE DATABASE RESULTS SHOWN ABOVE!`;
     }
 
     async callClaudeAPI(prompt) {
-        // Use the comprehensive database-integrated serverless function
-        const functionUrl = '/.netlify/functions/claude-ai-comprehensive-database';
+        // Try comprehensive function first, fallback to existing function
+        let functionUrl = '/.netlify/functions/claude-ai-comprehensive-database';
         
         console.log('🧠 Calling Claude AI with comprehensive database access...');
         
@@ -12985,7 +12985,8 @@ RESPOND ONLY WITH FACTUAL DATA FROM THE DATABASE RESULTS SHOWN ABOVE!`;
 
             if (!response.ok) {
                 if (response.status === 404) {
-                    throw new Error('FUNCTION_NOT_DEPLOYED: Comprehensive database function not found at /.netlify/functions/claude-ai-comprehensive-database');
+                    console.log('⚠️ Comprehensive function not found, trying fallback...');
+                    return await this.callExistingClaudeAPI(prompt);
                 }
                 
                 const errorData = await response.json().catch(() => ({}));
@@ -13009,14 +13010,50 @@ RESPOND ONLY WITH FACTUAL DATA FROM THE DATABASE RESULTS SHOWN ABOVE!`;
         } catch (error) {
             console.error('❌ Claude AI call failed:', error);
             
-            // Provide specific error guidance
-            if (error.message.includes('FUNCTION_NOT_DEPLOYED')) {
-                throw new Error('SETUP_REQUIRED: Please deploy the comprehensive database Claude AI serverless function. See setup guide for instructions.');
-            } else if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
-                throw new Error('NETWORK_ERROR: Cannot reach Claude AI function. Ensure proper deployment and try refreshing the page.');
+            // Try fallback if comprehensive function fails
+            if (error.message.includes('FUNCTION_NOT_DEPLOYED') || error.message.includes('Failed to fetch')) {
+                console.log('🔄 Trying fallback Claude AI function...');
+                return await this.callExistingClaudeAPI(prompt);
             } else {
                 throw error;
             }
+        }
+    }
+
+    async callExistingClaudeAPI(prompt) {
+        // Fallback to existing auto-detect function
+        const functionUrl = '/.netlify/functions/claude-ai';
+        
+        console.log('🔄 Using existing Claude AI function as fallback...');
+        
+        try {
+            const response = await fetch(functionUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    prompt: prompt,
+                    maxTokens: 1500
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(`Fallback function error: ${response.status} - ${errorData.error || response.statusText}`);
+            }
+
+            const data = await response.json();
+            
+            if (data.success && data.response) {
+                console.log('✅ Claude AI response from fallback function received');
+                return data.response;
+            } else {
+                throw new Error(`Fallback AI error: ${data.error || 'AI service unavailable'}`);
+            }
+        } catch (error) {
+            console.error('❌ Fallback Claude AI also failed:', error);
+            throw new Error('SETUP_REQUIRED: Both comprehensive and basic Claude AI functions are unavailable. Please deploy at least one Claude AI serverless function.');
         }
     }
 
