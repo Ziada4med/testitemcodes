@@ -239,8 +239,8 @@
                                 </svg>
                             </div>
                             <div>
-                                <h3 class="font-semibold text-lg">Ask Ziad</h3>
-                                <p class="text-blue-100 text-xs">For Any Help Needed</p>
+                                <h3 class="font-semibold text-lg">Portal AI Assistant</h3>
+                                <p class="text-blue-100 text-xs">Code Generation Helper</p>
                             </div>
                         </div>
                         <button id="ai-chat-close" class="text-white hover:text-gray-200 transition-colors">
@@ -264,7 +264,13 @@
                                 </div>
                                 <div class="text-sm text-gray-700 leading-relaxed">
                                     <p class="mb-3">👋 Welcome to your **Claude AI-Powered** Code Generation Assistant!</p>
-                                   
+                                    <div class="bg-gradient-to-r from-red-50 to-orange-50 p-3 rounded-lg border border-red-200 mb-3">
+                                        <div class="flex items-center space-x-2 mb-2">
+                                            <span class="text-lg">🔧</span>
+                                            <span class="font-semibold text-red-800">Setup Required</span>
+                                        </div>
+                                        <p class="text-xs text-red-700">Deploy Claude AI serverless function to enable AI responses</p>
+                                    </div>
                                     
                                     <div class="bg-blue-50 p-2 rounded-lg border border-blue-200 mb-3">
                                         <p class="text-xs text-blue-800">
@@ -14365,7 +14371,10 @@ Your responses should demonstrate understanding of the user's intent and provide
             sourceLabel = 'Claude AI';
             sourceBadge = '<span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">Live AI</span>';
         } else if (source === 'error' || responseData.setupRequired) {
-            
+            sourceIcon = '🔧';
+            sourceColor = 'text-red-600';
+            sourceLabel = 'Setup Required';
+            sourceBadge = '<span class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">Config Needed</span>';
         } else if (source === 'system') {
             sourceIcon = '🔧';
             sourceColor = 'text-gray-600';
