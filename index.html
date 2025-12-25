@@ -12966,10 +12966,10 @@ RESPOND ONLY WITH FACTUAL DATA FROM THE DATABASE RESULTS SHOWN ABOVE!`;
     }
 
     async callClaudeAPI(prompt) {
-        // Use the enhanced database-integrated serverless function
-        const functionUrl = '/.netlify/functions/claude-ai-with-database';
+        // Use the comprehensive database-integrated serverless function
+        const functionUrl = '/.netlify/functions/claude-ai-comprehensive-database';
         
-        console.log('🧠 Calling Claude AI with direct database access...');
+        console.log('🧠 Calling Claude AI with comprehensive database access...');
         
         try {
             const response = await fetch(functionUrl, {
@@ -12979,13 +12979,13 @@ RESPOND ONLY WITH FACTUAL DATA FROM THE DATABASE RESULTS SHOWN ABOVE!`;
                 },
                 body: JSON.stringify({
                     prompt: prompt,
-                    maxTokens: 1500
+                    maxTokens: 2000
                 })
             });
 
             if (!response.ok) {
                 if (response.status === 404) {
-                    throw new Error('FUNCTION_NOT_DEPLOYED: Database-integrated Claude function not found at /.netlify/functions/claude-ai-with-database');
+                    throw new Error('FUNCTION_NOT_DEPLOYED: Comprehensive database function not found at /.netlify/functions/claude-ai-comprehensive-database');
                 }
                 
                 const errorData = await response.json().catch(() => ({}));
@@ -12995,11 +12995,11 @@ RESPOND ONLY WITH FACTUAL DATA FROM THE DATABASE RESULTS SHOWN ABOVE!`;
             const data = await response.json();
             
             if (data.success && data.response) {
-                console.log('✅ Claude AI response with database access received successfully');
-                console.log('📊 Database results included:', !!data.searchResults);
-                if (data.searchResults) {
-                    console.log('🔍 Search results:', data.searchResults);
-                }
+                console.log('✅ Claude AI response with comprehensive database access received');
+                console.log('📊 Database search summary:', {
+                    tablesSearched: data.searchResults?.tablesSearched || [],
+                    totalResults: data.searchResults?.totalResults || 0
+                });
                 return data.response;
             } else if (data.fallback) {
                 throw new Error(`AI_SERVICE_ERROR: ${data.error || 'AI temporarily unavailable'}`);
@@ -13011,7 +13011,7 @@ RESPOND ONLY WITH FACTUAL DATA FROM THE DATABASE RESULTS SHOWN ABOVE!`;
             
             // Provide specific error guidance
             if (error.message.includes('FUNCTION_NOT_DEPLOYED')) {
-                throw new Error('SETUP_REQUIRED: Please deploy the database-integrated Claude AI serverless function. See setup guide for instructions.');
+                throw new Error('SETUP_REQUIRED: Please deploy the comprehensive database Claude AI serverless function. See setup guide for instructions.');
             } else if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
                 throw new Error('NETWORK_ERROR: Cannot reach Claude AI function. Ensure proper deployment and try refreshing the page.');
             } else {
