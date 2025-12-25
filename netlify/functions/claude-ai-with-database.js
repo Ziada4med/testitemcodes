@@ -1,5 +1,5 @@
-// netlify/functions/claude-ai-with-database.js
-// Enhanced Claude AI function with direct database integration
+// netlify/functions/claude-ai-comprehensive-database.js
+// Comprehensive Claude AI function with intelligent multi-table database search
 
 const { createClient } = require('@supabase/supabase-js');
 
@@ -26,10 +26,10 @@ exports.handler = async (event, context) => {
     }
 
     try {
-        console.log('Claude AI with database access called:', new Date().toISOString());
+        console.log('🧠 Comprehensive Claude AI with full database access called:', new Date().toISOString());
         
         const requestData = JSON.parse(event.body);
-        const { prompt, maxTokens = 1500, userMessage, detectedIntent, entities } = requestData;
+        const { prompt, maxTokens = 2000, userMessage } = requestData;
 
         if (!prompt && !userMessage) {
             return {
@@ -61,7 +61,7 @@ exports.handler = async (event, context) => {
                 statusCode: 200,
                 headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    error: 'Supabase configuration missing (SUPABASE_URL or SUPABASE_ANON_KEY)', 
+                    error: 'Supabase configuration missing', 
                     success: false, 
                     fallback: true 
                 }),
@@ -72,35 +72,19 @@ exports.handler = async (event, context) => {
         const supabase = createClient(supabaseUrl, supabaseKey);
         console.log('✅ Supabase client initialized');
 
-        // Extract user message and intent from prompt if not provided separately
+        // Extract user message and analyze it intelligently
         const actualUserMessage = userMessage || extractUserMessage(prompt);
-        const actualIntent = detectedIntent || analyzeIntent(actualUserMessage);
-        const actualEntities = entities || extractEntities(actualUserMessage);
-
-        console.log('📊 Processing:', { 
-            userMessage: actualUserMessage, 
-            intent: actualIntent, 
-            entities: actualEntities 
-        });
-
-        // Perform database search based on intent
-        let searchResults = null;
-        try {
-            searchResults = await performDatabaseSearch(supabase, actualIntent, actualEntities, actualUserMessage);
-            console.log('🔍 Database search results:', searchResults);
-        } catch (dbError) {
-            console.error('Database search error:', dbError);
-            searchResults = { 
-                error: `Database search failed: ${dbError.message}`,
-                results: [],
-                total: 0
-            };
-        }
-
-        // Build enhanced prompt with real database results
-        const enhancedPrompt = buildEnhancedPrompt(actualUserMessage, actualIntent, actualEntities, searchResults);
         
-        console.log('🧠 Calling Claude with database-enhanced prompt...');
+        console.log('🔍 Analyzing user query:', actualUserMessage);
+
+        // Intelligent query analysis and database search across ALL relevant tables
+        const searchResults = await performComprehensiveSearch(supabase, actualUserMessage);
+        console.log('📊 Comprehensive search results:', searchResults);
+
+        // Build enhanced prompt with ALL relevant database results
+        const enhancedPrompt = buildComprehensivePrompt(actualUserMessage, searchResults);
+        
+        console.log('🧠 Calling Claude with comprehensive database-enhanced prompt...');
 
         // Try multiple Claude models
         const models = ['claude-3-5-sonnet-20241022', 'claude-3-5-sonnet-20240620', 'claude-3-haiku-20240307'];
@@ -157,7 +141,8 @@ exports.handler = async (event, context) => {
                 response: claudeResponse,
                 model: usedModel,
                 searchResults: searchResults,
-                databaseAccess: true,
+                comprehensiveSearch: true,
+                tablesSearched: searchResults.tablesSearched || [],
                 timestamp: new Date().toISOString()
             }),
         };
@@ -177,205 +162,598 @@ exports.handler = async (event, context) => {
     }
 };
 
-// Database search function
-async function performDatabaseSearch(supabase, intent, entities, message) {
-    console.log(`🔍 Performing database search - Intent: ${intent}, Message: "${message}"`);
+// Comprehensive database search function that searches ALL relevant tables
+async function performComprehensiveSearch(supabase, userMessage) {
+    console.log(`🔍 Performing comprehensive search for: "${userMessage}"`);
     
+    // Intelligent query analysis
+    const queryAnalysis = analyzeUserQuery(userMessage);
+    console.log('📊 Query analysis:', queryAnalysis);
+
+    const results = {
+        tablesSearched: [],
+        totalResults: 0,
+        searchQueries: []
+    };
+
     try {
-        switch (intent) {
-            case 'search_project':
-            case 'search_codes':
-                return await searchProjects(supabase, entities, message);
-            case 'check_status':
-                return await getUserStats(supabase);
-            default:
-                // Default to project search for any query
-                return await searchProjects(supabase, entities, message);
+        // Search based on query type and keywords
+        if (queryAnalysis.searchProjects) {
+            console.log('🏗️ Searching classification_projects...');
+            const projectResults = await searchProjects(supabase, queryAnalysis);
+            if (projectResults.results.length > 0) {
+                results.projects = projectResults;
+                results.tablesSearched.push('classification_projects');
+                results.totalResults += projectResults.results.length;
+            }
         }
+
+        if (queryAnalysis.searchItemCodes) {
+            console.log('🔧 Searching item_code_workflow...');
+            const itemCodeResults = await searchItemCodes(supabase, queryAnalysis);
+            if (itemCodeResults.results.length > 0) {
+                results.itemCodes = itemCodeResults;
+                results.tablesSearched.push('item_code_workflow');
+                results.totalResults += itemCodeResults.results.length;
+            }
+        }
+
+        if (queryAnalysis.searchUsers) {
+            console.log('👥 Searching users...');
+            const userResults = await searchUsers(supabase, queryAnalysis);
+            if (userResults.results.length > 0) {
+                results.users = userResults;
+                results.tablesSearched.push('users');
+                results.totalResults += userResults.results.length;
+            }
+        }
+
+        if (queryAnalysis.searchRequests) {
+            console.log('📋 Searching requests...');
+            const requestResults = await searchRequests(supabase, queryAnalysis);
+            if (requestResults.results.length > 0) {
+                results.requests = requestResults;
+                results.tablesSearched.push('standard_value_requests');
+                results.totalResults += requestResults.results.length;
+            }
+        }
+
+        if (queryAnalysis.searchManufacturers) {
+            console.log('🏭 Searching manufacturers...');
+            const manufacturerResults = await searchManufacturers(supabase, queryAnalysis);
+            if (manufacturerResults.results.length > 0) {
+                results.manufacturers = manufacturerResults;
+                results.tablesSearched.push('project_manufacturers');
+                results.totalResults += manufacturerResults.results.length;
+            }
+        }
+
+        if (queryAnalysis.searchAttributes) {
+            console.log('🏷️ Searching attributes...');
+            const attributeResults = await searchAttributes(supabase, queryAnalysis);
+            if (attributeResults.results.length > 0) {
+                results.attributes = attributeResults;
+                results.tablesSearched.push('project_attributes');
+                results.totalResults += attributeResults.results.length;
+            }
+        }
+
+        if (queryAnalysis.searchReviews || queryAnalysis.searchStatus) {
+            console.log('✅ Searching reviews and status...');
+            const reviewResults = await searchReviews(supabase, queryAnalysis);
+            if (reviewResults.results.length > 0) {
+                results.reviews = reviewResults;
+                results.tablesSearched.push('review_logs');
+                results.totalResults += reviewResults.results.length;
+            }
+        }
+
+        // If no specific search was triggered, do a broad search
+        if (results.totalResults === 0) {
+            console.log('🌐 No specific matches, performing broad search...');
+            const broadResults = await performBroadSearch(supabase, queryAnalysis);
+            Object.assign(results, broadResults);
+        }
+
+        results.searchQuery = userMessage;
+        results.queryAnalysis = queryAnalysis;
+        
+        console.log(`✅ Comprehensive search completed: ${results.totalResults} total results across ${results.tablesSearched.length} tables`);
+        
+        return results;
+
     } catch (error) {
-        console.error('Database search error:', error);
+        console.error('Comprehensive search error:', error);
         return {
             error: error.message,
-            results: [],
-            total: 0,
-            searchQuery: message
+            searchQuery: userMessage,
+            tablesSearched: [],
+            totalResults: 0
         };
     }
 }
 
-// Search projects function
-async function searchProjects(supabase, entities, message) {
-    let searchQuery = '';
+// Intelligent user query analysis
+function analyzeUserQuery(userMessage) {
+    const lower = userMessage.toLowerCase();
     
-    // Extract search terms from entities or message
-    if (entities && entities.materials && entities.materials.length > 0) {
-        searchQuery = entities.materials[0];
-    } else {
-        // Extract keywords from message
-        const keywords = message.toLowerCase().match(/\b(steel|electrical|mechanical|plumbing|hvac|concrete|upvc|aluminum|copper|pvc|pipe|valve|conduit|cable|fitting|pump|motor|switch|panel|duct)\b/g);
-        if (keywords && keywords.length > 0) {
-            searchQuery = keywords[0];
-        } else {
-            searchQuery = message.toLowerCase().replace(/[^a-zA-Z0-9\s]/g, '').trim().split(' ')[0];
-        }
-    }
+    // Keywords for different search types
+    const materialKeywords = /\b(steel|electrical|mechanical|plumbing|hvac|concrete|upvc|aluminum|copper|pvc|pipe|valve|conduit|cable|fitting|pump|motor|switch|panel|duct|beam|wire|insulation)\b/gi;
+    const projectKeywords = /\b(project|classification|division|section|csi|category)\b/gi;
+    const itemCodeKeywords = /\b(item code|code|part|component|material|equipment|product)\b/gi;
+    const userKeywords = /\b(user|reviewer|admin|created by|approved by|person|staff|team)\b/gi;
+    const statusKeywords = /\b(pending|approved|rejected|status|review|workflow|submitted|draft)\b/gi;
+    const manufacturerKeywords = /\b(manufacturer|supplier|vendor|brand|company|made by)\b/gi;
+    const attributeKeywords = /\b(attribute|property|specification|feature|characteristic)\b/gi;
+    const requestKeywords = /\b(request|submission|application)\b/gi;
+    const priceKeywords = /\b(price|cost|expensive|cheap|budget|currency)\b/gi;
+    const dateKeywords = /\b(today|yesterday|week|month|year|recent|latest|created|updated)\b/gi;
 
-    console.log(`🔍 Searching projects for: "${searchQuery}"`);
+    // Extract materials mentioned
+    const materials = [...new Set((lower.match(materialKeywords) || []).map(m => m.toLowerCase()))];
+    
+    // Extract CSI codes if mentioned
+    const csiCodes = lower.match(/\b\d{2}(\s*\d{2}(\s*\d{2})?)?\b/g) || [];
+    
+    // Extract specific search terms
+    const searchTerms = lower.split(/[^\w\s]/).filter(term => 
+        term.length > 2 && 
+        !['the', 'and', 'for', 'are', 'with', 'any', 'all', 'can', 'you', 'show', 'find', 'get', 'list'].includes(term)
+    );
 
-    // Direct database query
+    return {
+        originalQuery: userMessage,
+        materials: materials,
+        csiCodes: csiCodes,
+        searchTerms: searchTerms,
+        
+        // Determine what to search based on query
+        searchProjects: projectKeywords.test(lower) || csiCodes.length > 0 || materials.length > 0,
+        searchItemCodes: itemCodeKeywords.test(lower) || materials.length > 0 || lower.includes('item') || lower.includes('code'),
+        searchUsers: userKeywords.test(lower),
+        searchRequests: requestKeywords.test(lower) || statusKeywords.test(lower),
+        searchManufacturers: manufacturerKeywords.test(lower),
+        searchAttributes: attributeKeywords.test(lower),
+        searchReviews: statusKeywords.test(lower) || lower.includes('review'),
+        searchStatus: statusKeywords.test(lower),
+        
+        // Query modifiers
+        includePrice: priceKeywords.test(lower),
+        includeDate: dateKeywords.test(lower),
+        includeStatus: true, // Always include status for context
+        
+        // Intent analysis
+        intent: determineIntent(lower),
+        complexity: searchTerms.length > 3 ? 'complex' : 'simple'
+    };
+}
+
+// Determine user intent
+function determineIntent(lower) {
+    if (lower.match(/\b(show|list|find|get|search)\b/)) return 'search';
+    if (lower.match(/\b(how many|count|total|number)\b/)) return 'count';
+    if (lower.match(/\b(who|created|approved|reviewed)\b/)) return 'who';
+    if (lower.match(/\b(when|date|time|recent)\b/)) return 'when';
+    if (lower.match(/\b(why|reason|comment)\b/)) return 'why';
+    if (lower.match(/\b(compare|versus|difference)\b/)) return 'compare';
+    if (lower.match(/\b(status|pending|approved|rejected)\b/)) return 'status';
+    return 'general';
+}
+
+// Search functions for each table
+
+async function searchProjects(supabase, analysis) {
     let query = supabase
         .from('classification_projects')
         .select(`
-            id,
-            project_name,
-            division_code,
-            division_description,
-            section_code,
-            section_description,
-            detailed_section_code,
-            detailed_section_description,
-            item_code,
-            item_description,
-            status,
-            created_at
+            id, project_name, division_code, division_description,
+            section_code, section_description, detailed_section_code,
+            detailed_section_description, item_code, item_description,
+            status, created_at, created_by,
+            users!created_by(username)
         `)
-        .eq('status', 'admin_approved')
         .limit(10)
         .order('created_at', { ascending: false });
 
-    // Apply search filter if we have a query
-    if (searchQuery && searchQuery.length > 2) {
-        query = query.or(`project_name.ilike.%${searchQuery}%,division_description.ilike.%${searchQuery}%,section_description.ilike.%${searchQuery}%,detailed_section_description.ilike.%${searchQuery}%,item_description.ilike.%${searchQuery}%`);
+    // Apply filters based on analysis
+    if (analysis.materials.length > 0) {
+        const materialFilter = analysis.materials.map(m => 
+            `project_name.ilike.%${m}%,division_description.ilike.%${m}%,section_description.ilike.%${m}%,detailed_section_description.ilike.%${m}%,item_description.ilike.%${m}%`
+        ).join(',');
+        query = query.or(materialFilter);
+    } else if (analysis.searchTerms.length > 0) {
+        const termFilter = analysis.searchTerms.slice(0, 3).map(term =>
+            `project_name.ilike.%${term}%,division_description.ilike.%${term}%,section_description.ilike.%${term}%,item_description.ilike.%${term}%`
+        ).join(',');
+        query = query.or(termFilter);
+    }
+
+    if (analysis.csiCodes.length > 0) {
+        query = query.in('division_code', analysis.csiCodes);
     }
 
     const { data, error } = await query;
 
-    if (error) {
-        throw new Error(`Database query failed: ${error.message}`);
-    }
-
-    console.log(`✅ Found ${data ? data.length : 0} projects`);
+    if (error) throw new Error(`Projects search failed: ${error.message}`);
 
     return {
         results: data || [],
-        searchQuery: searchQuery,
-        total: data ? data.length : 0,
-        type: 'projects',
-        source: 'direct_serverless_query'
+        searchType: 'projects',
+        searchTerms: analysis.materials.concat(analysis.searchTerms),
+        total: data ? data.length : 0
     };
 }
 
-// Get user statistics
-async function getUserStats(supabase) {
-    try {
-        const { data, error } = await supabase
-            .from('classification_projects')
-            .select('status')
-            .limit(100);
+async function searchItemCodes(supabase, analysis) {
+    let query = supabase
+        .from('item_code_workflow')
+        .select(`
+            id, item_code, description1, description2, unit_price,
+            currency_code, manufacturer, uom, country_of_origin,
+            model_number, status, erp_integrated, created_at,
+            project_id, classification_projects!project_id(project_name),
+            users!created_by(username)
+        `)
+        .limit(15)
+        .order('created_at', { ascending: false });
 
-        if (error) throw error;
-
-        const stats = {
-            total: data.length,
-            approved: data.filter(p => p.status === 'admin_approved').length,
-            pending: data.filter(p => p.status !== 'admin_approved').length
-        };
-
-        return {
-            results: [stats],
-            type: 'statistics',
-            total: 1,
-            searchQuery: 'user_statistics'
-        };
-    } catch (error) {
-        throw new Error(`Statistics query failed: ${error.message}`);
+    // Apply filters
+    if (analysis.materials.length > 0) {
+        const materialFilter = analysis.materials.map(m =>
+            `item_code.ilike.%${m}%,description1.ilike.%${m}%,description2.ilike.%${m}%,manufacturer.ilike.%${m}%`
+        ).join(',');
+        query = query.or(materialFilter);
+    } else if (analysis.searchTerms.length > 0) {
+        const termFilter = analysis.searchTerms.slice(0, 3).map(term =>
+            `item_code.ilike.%${term}%,description1.ilike.%${term}%,description2.ilike.%${term}%,manufacturer.ilike.%${term}%`
+        ).join(',');
+        query = query.or(termFilter);
     }
-}
 
-// Intent analysis
-function analyzeIntent(message) {
-    const lower = message.toLowerCase();
-    
-    if (lower.includes('project') || lower.includes('classification')) {
-        return 'search_project';
-    } else if (lower.includes('status') || lower.includes('statistics') || lower.includes('stats')) {
-        return 'check_status';
-    } else if (lower.match(/\b(find|search|show|list|get)\b/)) {
-        return 'search_codes';
-    } else {
-        return 'search_project'; // Default to project search
-    }
-}
+    const { data, error } = await query;
 
-// Entity extraction
-function extractEntities(message) {
-    const materials = message.toLowerCase().match(/\b(steel|electrical|mechanical|plumbing|hvac|concrete|upvc|aluminum|copper|pvc|pipe|valve|conduit|cable|fitting|pump|motor|switch|panel|duct)\b/g);
-    
+    if (error) throw new Error(`Item codes search failed: ${error.message}`);
+
     return {
-        materials: materials ? [...new Set(materials)] : []
+        results: data || [],
+        searchType: 'itemCodes',
+        searchTerms: analysis.materials.concat(analysis.searchTerms),
+        total: data ? data.length : 0
     };
 }
 
-// Extract user message from prompt
+async function searchUsers(supabase, analysis) {
+    let query = supabase
+        .from('users')
+        .select(`
+            id, username, email, role, status, created_at
+        `)
+        .limit(10);
+
+    if (analysis.searchTerms.length > 0) {
+        const termFilter = analysis.searchTerms.map(term =>
+            `username.ilike.%${term}%,email.ilike.%${term}%,role.ilike.%${term}%`
+        ).join(',');
+        query = query.or(termFilter);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw new Error(`Users search failed: ${error.message}`);
+
+    return {
+        results: data || [],
+        searchType: 'users',
+        total: data ? data.length : 0
+    };
+}
+
+async function searchRequests(supabase, analysis) {
+    let query = supabase
+        .from('standard_value_requests')
+        .select(`
+            id, attribute_name, new_value, reason, status,
+            created_at, users!created_by(username),
+            classification_projects!project_id(project_name)
+        `)
+        .limit(10)
+        .order('created_at', { ascending: false });
+
+    if (analysis.searchTerms.length > 0) {
+        const termFilter = analysis.searchTerms.map(term =>
+            `attribute_name.ilike.%${term}%,new_value.ilike.%${term}%,reason.ilike.%${term}%`
+        ).join(',');
+        query = query.or(termFilter);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw new Error(`Requests search failed: ${error.message}`);
+
+    return {
+        results: data || [],
+        searchType: 'requests',
+        total: data ? data.length : 0
+    };
+}
+
+async function searchManufacturers(supabase, analysis) {
+    let query = supabase
+        .from('project_manufacturers')
+        .select(`
+            id, manufacturer_name, created_at,
+            classification_projects!project_id(project_name),
+            users!created_by(username)
+        `)
+        .limit(10);
+
+    if (analysis.materials.length > 0 || analysis.searchTerms.length > 0) {
+        const terms = analysis.materials.concat(analysis.searchTerms);
+        const termFilter = terms.map(term =>
+            `manufacturer_name.ilike.%${term}%`
+        ).join(',');
+        query = query.or(termFilter);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw new Error(`Manufacturers search failed: ${error.message}`);
+
+    return {
+        results: data || [],
+        searchType: 'manufacturers',
+        total: data ? data.length : 0
+    };
+}
+
+async function searchAttributes(supabase, analysis) {
+    let query = supabase
+        .from('project_attributes')
+        .select(`
+            id, attribute_name, standard_values, is_mandatory,
+            created_at, classification_projects!project_id(project_name)
+        `)
+        .limit(10);
+
+    if (analysis.searchTerms.length > 0) {
+        const termFilter = analysis.searchTerms.map(term =>
+            `attribute_name.ilike.%${term}%`
+        ).join(',');
+        query = query.or(termFilter);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw new Error(`Attributes search failed: ${error.message}`);
+
+    return {
+        results: data || [],
+        searchType: 'attributes',
+        total: data ? data.length : 0
+    };
+}
+
+async function searchReviews(supabase, analysis) {
+    let query = supabase
+        .from('review_logs')
+        .select(`
+            id, action, comments, created_at,
+            classification_projects!project_id(project_name),
+            users!reviewer_id(username)
+        `)
+        .limit(10)
+        .order('created_at', { ascending: false });
+
+    const { data, error } = await query;
+
+    if (error) throw new Error(`Reviews search failed: ${error.message}`);
+
+    return {
+        results: data || [],
+        searchType: 'reviews',
+        total: data ? data.length : 0
+    };
+}
+
+// Perform broad search when no specific matches
+async function performBroadSearch(supabase, analysis) {
+    const results = {
+        tablesSearched: [],
+        totalResults: 0
+    };
+
+    // Search top tables with basic queries
+    try {
+        const projectResults = await searchProjects(supabase, analysis);
+        const itemResults = await searchItemCodes(supabase, analysis);
+        
+        if (projectResults.results.length > 0) {
+            results.projects = projectResults;
+            results.tablesSearched.push('classification_projects');
+            results.totalResults += projectResults.results.length;
+        }
+        
+        if (itemResults.results.length > 0) {
+            results.itemCodes = itemResults;
+            results.tablesSearched.push('item_code_workflow');
+            results.totalResults += itemResults.results.length;
+        }
+    } catch (error) {
+        console.error('Broad search error:', error);
+    }
+
+    return results;
+}
+
+// Build comprehensive prompt with all database results
+function buildComprehensivePrompt(userMessage, searchResults) {
+    let prompt = `You are an intelligent AI assistant for a comprehensive Code Generation Portal with access to a complete database.
+
+USER QUERY: "${userMessage}"
+
+COMPREHENSIVE DATABASE SEARCH RESULTS:
+Tables Searched: ${searchResults.tablesSearched.join(', ')}
+Total Results Found: ${searchResults.totalResults}
+Query Analysis: ${JSON.stringify(searchResults.queryAnalysis, null, 2)}`;
+
+    if (searchResults.totalResults === 0) {
+        prompt += `
+
+NO RESULTS FOUND in any database table.
+The database was searched across multiple relevant tables but returned 0 results.`;
+    } else {
+        // Add results from each table
+        if (searchResults.projects) {
+            prompt += `
+
+=== PROJECTS (classification_projects) ===
+Found: ${searchResults.projects.total} projects
+`;
+            searchResults.projects.results.forEach((project, index) => {
+                prompt += `
+Project ${index + 1}:
+- Project ID: ${project.id}
+- Project Name: ${project.project_name}
+- Division: ${project.division_code} - ${project.division_description}
+- Section: ${project.section_code} - ${project.section_description}
+- Detailed Section: ${project.detailed_section_code} - ${project.detailed_section_description}
+- Item Code: ${project.item_code}
+- Item Description: ${project.item_description}
+- Status: ${project.status}
+- Created: ${project.created_at}
+- Created By: ${project.users?.username || 'Unknown'}`;
+            });
+        }
+
+        if (searchResults.itemCodes) {
+            prompt += `
+
+=== ITEM CODES (item_code_workflow) ===
+Found: ${searchResults.itemCodes.total} item codes
+`;
+            searchResults.itemCodes.results.forEach((item, index) => {
+                prompt += `
+Item Code ${index + 1}:
+- Item Code: ${item.item_code}
+- Description 1: ${item.description1}
+- Description 2: ${item.description2 || 'N/A'}
+- Price: ${item.unit_price ? item.unit_price + ' ' + item.currency_code : 'Not set'}
+- Manufacturer: ${item.manufacturer || 'Not specified'}
+- UOM: ${item.uom || 'Not specified'}
+- Status: ${item.status}
+- ERP Integrated: ${item.erp_integrated ? 'Yes' : 'No'}
+- Project: ${item.classification_projects?.project_name || 'Unknown'}
+- Created By: ${item.users?.username || 'Unknown'}
+- Created: ${item.created_at}`;
+            });
+        }
+
+        if (searchResults.users) {
+            prompt += `
+
+=== USERS ===
+Found: ${searchResults.users.total} users
+`;
+            searchResults.users.results.forEach((user, index) => {
+                prompt += `
+User ${index + 1}:
+- Username: ${user.username}
+- Email: ${user.email}
+- Role: ${user.role}
+- Status: ${user.status}
+- Created: ${user.created_at}`;
+            });
+        }
+
+        if (searchResults.requests) {
+            prompt += `
+
+=== STANDARD VALUE REQUESTS ===
+Found: ${searchResults.requests.total} requests
+`;
+            searchResults.requests.results.forEach((request, index) => {
+                prompt += `
+Request ${index + 1}:
+- Attribute: ${request.attribute_name}
+- New Value: ${request.new_value}
+- Reason: ${request.reason || 'Not specified'}
+- Status: ${request.status}
+- Project: ${request.classification_projects?.project_name || 'Unknown'}
+- Created By: ${request.users?.username || 'Unknown'}
+- Created: ${request.created_at}`;
+            });
+        }
+
+        if (searchResults.manufacturers) {
+            prompt += `
+
+=== MANUFACTURERS ===
+Found: ${searchResults.manufacturers.total} manufacturers
+`;
+            searchResults.manufacturers.results.forEach((mfg, index) => {
+                prompt += `
+Manufacturer ${index + 1}:
+- Name: ${mfg.manufacturer_name}
+- Project: ${mfg.classification_projects?.project_name || 'Unknown'}
+- Added By: ${mfg.users?.username || 'Unknown'}
+- Added: ${mfg.created_at}`;
+            });
+        }
+
+        if (searchResults.attributes) {
+            prompt += `
+
+=== PROJECT ATTRIBUTES ===
+Found: ${searchResults.attributes.total} attributes
+`;
+            searchResults.attributes.results.forEach((attr, index) => {
+                prompt += `
+Attribute ${index + 1}:
+- Name: ${attr.attribute_name}
+- Mandatory: ${attr.is_mandatory ? 'Yes' : 'No'}
+- Standard Values: ${JSON.stringify(attr.standard_values)}
+- Project: ${attr.classification_projects?.project_name || 'Unknown'}
+- Created: ${attr.created_at}`;
+            });
+        }
+
+        if (searchResults.reviews) {
+            prompt += `
+
+=== REVIEW LOGS ===
+Found: ${searchResults.reviews.total} review entries
+`;
+            searchResults.reviews.results.forEach((review, index) => {
+                prompt += `
+Review ${index + 1}:
+- Action: ${review.action}
+- Comments: ${review.comments || 'No comments'}
+- Project: ${review.classification_projects?.project_name || 'Unknown'}
+- Reviewer: ${review.users?.username || 'Unknown'}
+- Date: ${review.created_at}`;
+            });
+        }
+    }
+
+    prompt += `
+
+RESPONSE REQUIREMENTS:
+1. ONLY use the database results shown above
+2. Never invent or make up any data not present in the search results
+3. Reference specific IDs, names, and details from the actual database results
+4. If no results were found, clearly state this and suggest alternative searches
+5. Provide comprehensive analysis across all relevant data found
+6. Format response with clear structure using headers and organized sections
+7. Be intelligent about connecting related information across different tables
+8. Provide insights and recommendations based on the actual data patterns
+
+Respond with a comprehensive, intelligent analysis based ONLY on the actual database information provided above!`;
+
+    return prompt;
+}
+
+// Utility function to extract user message from prompt
 function extractUserMessage(prompt) {
     const match = prompt.match(/USER MESSAGE: "([^"]+)"/);
     return match ? match[1] : prompt;
-}
-
-// Build enhanced prompt with database results
-function buildEnhancedPrompt(userMessage, intent, entities, searchResults) {
-    let prompt = `You are an AI assistant for a Code Generation Portal with direct database access.
-
-USER QUERY: "${userMessage}"
-DETECTED INTENT: ${intent}
-EXTRACTED ENTITIES: ${JSON.stringify(entities)}
-
-DATABASE SEARCH RESULTS:`;
-
-    if (searchResults && searchResults.results && searchResults.results.length > 0) {
-        prompt += `\nSearch Query: "${searchResults.searchQuery}"`;
-        prompt += `\nResults Found: ${searchResults.total}`;
-        prompt += `\nDatabase Source: ${searchResults.source}`;
-        prompt += `\n\nACTUAL DATABASE RESULTS:`;
-        
-        searchResults.results.forEach((result, index) => {
-            prompt += `\n\n--- Result ${index + 1} ---`;
-            if (result.project_name) {
-                prompt += `\nProject ID: ${result.id}`;
-                prompt += `\nProject Name: ${result.project_name}`;
-                prompt += `\nDivision: ${result.division_code} - ${result.division_description || 'No description'}`;
-                prompt += `\nSection: ${result.section_code} - ${result.section_description || 'No description'}`;
-                prompt += `\nDetailed Section: ${result.detailed_section_code} - ${result.detailed_section_description || 'No description'}`;
-                prompt += `\nItem Code: ${result.item_code || 'Not specified'}`;
-                prompt += `\nItem Description: ${result.item_description || 'Not specified'}`;
-                prompt += `\nStatus: ${result.status}`;
-                prompt += `\nCreated: ${result.created_at}`;
-            } else if (result.total !== undefined) {
-                // Statistics result
-                prompt += `\nTotal Projects: ${result.total}`;
-                prompt += `\nApproved Projects: ${result.approved}`;
-                prompt += `\nPending Projects: ${result.pending}`;
-            } else {
-                prompt += `\nData: ${JSON.stringify(result)}`;
-            }
-        });
-        prompt += `\n--- End Database Results ---`;
-    } else if (searchResults && searchResults.error) {
-        prompt += `\nDATABASE ERROR: ${searchResults.error}`;
-    } else {
-        prompt += `\nNO RESULTS FOUND for query: "${searchResults?.searchQuery || userMessage}"`;
-        prompt += `\nDatabase was searched but returned 0 results`;
-    }
-
-    prompt += `\n\nINSTRUCTIONS:
-1. ONLY use the database results shown above
-2. Never invent or make up project IDs, names, or any data
-3. If no results were found, clearly state this and suggest alternatives
-4. Reference the exact project IDs, names, and details from the database results
-5. Format your response with clear structure and emojis
-6. Be helpful and accurate
-
-Respond based ONLY on the actual database information provided above!`;
-
-    return prompt;
 }
